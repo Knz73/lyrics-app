@@ -202,5 +202,8 @@ def pegar_letra_por_fonte(url, fonte):
         except ValueError:
             return None
     
+    elif fonte == "Manual":
+        return url
+    
     return None
 

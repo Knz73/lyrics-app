@@ -1,7 +1,7 @@
 import tkinter as tk
 from tkinter import messagebox
 from api import buscar_todas_fontes, pegar_letra_por_fonte
-from database import adicionar, carregar
+from database import adicionar, carregar, remover, atualizar, adicionar_manual, carregar_manuais, remover_manual, buscar_manuais
 from deep_translator import GoogleTranslator # type: ignore
 from PIL import Image, ImageTk
 import requests
@@ -40,9 +40,17 @@ def buscar():
         query = artista
 
     resultados = buscar_todas_fontes(artista, musica, tipo)
+    
+    manuais = buscar_manuais(artista if artista else "", musica if musica else "")
+    resultados.extend(manuais)
 
     if not resultados:
-        messagebox.showerror("Erro", "Nada encontrado")
+        resposta = messagebox.askyesno(
+            "Nenhum resultado",
+            "Nenhuma letra encontrada.\nDeseja adicionar manualmente?"
+        )
+        if resposta:
+            mostrar_manuais()
         return
 
     escolher_resultado(resultados)
@@ -58,6 +66,7 @@ def escolher_resultado(resultados):
     # 🔥 separar por fontec
     genius_results = [(i, r) for i, r in enumerate(resultados) if r.get("fonte") == "Genius"]
     lyrics_results = [(i, r) for i, r in enumerate(resultados) if r.get("fonte") == "LRCLIB"]
+    manual_results = [(i, r) for i, r in enumerate(resultados) if r.get("fonte") == "Manual"]
 
     # 📦 container principal
     container = tk.Frame(janela, bg=BG)
@@ -67,17 +76,21 @@ def escolher_resultado(resultados):
     frame_genius.pack(side="left", fill="both", expand=True, padx=5)
 
     frame_letras = tk.Frame(container, bg=BG)
-    frame_letras.pack(side="right", fill="both", expand=True, padx=5)
+    frame_letras.pack(side="left", fill="both", expand=True, padx=5)
+
+    frame_manuais = tk.Frame(container, bg=BG)
+    frame_manuais.pack(side="left", fill="both", expand=True, padx=5)
 
     # títulos
     tk.Label(frame_genius, text="🎵 Genius", bg=BG, fg=FG, font=("Arial", 12, "bold")).pack()
     tk.Label(frame_letras, text="🌐 LRCLIB", bg=BG, fg=FG, font=("Arial", 12, "bold")).pack()
+    tk.Label(frame_manuais, text="✨ Salvos", bg=BG, fg=FG, font=("Arial", 12, "bold")).pack()
 
     # 🎯 função de seleção
     def selecionar(idx, card):
         selecionado["index"] = idx
 
-        for f in [frame_genius, frame_letras]:
+        for f in [frame_genius, frame_letras, frame_manuais]:
             for c in f.winfo_children():
                 c.config(bg="#1E1E1E")
 
@@ -113,6 +126,7 @@ def escolher_resultado(resultados):
     # 🔥 criar colunas
     criar_lista(frame_genius, genius_results)
     criar_lista(frame_letras, lyrics_results)
+    criar_lista(frame_manuais, manual_results)
 
 
 
@@ -157,6 +171,17 @@ def escolher_resultado(resultados):
         pady=5
     ).pack(pady=10)
 
+    tk.Button(
+        janela,
+        text="➕ Adicionar manualmente",
+        command=lambda: [janela.destroy(), abrir_adicionar_manual()],
+        bg="#555555",
+        fg=FG,
+        relief="flat",
+        padx=10,
+        pady=5
+    ).pack(pady=5)
+
 def traduzir():
     texto = text_resultado.get(1.0, tk.END)
 
@@ -167,67 +192,6 @@ def traduzir():
         text_resultado.insert(tk.END, traducao)
     except:
         messagebox.showerror("Erro", "Falha na tradução")
-
-def abrir_editor_manual():
-    janela = tk.Toplevel(root)
-    janela.title("Adicionar Letra")
-    janela.geometry("700x500")
-    janela.configure(bg=BG)
-
-    tk.Label(
-        janela,
-        text="Cole ou digite a letra abaixo:",
-        bg=BG,
-        fg=FG
-    ).pack(pady=10)
-
-    texto = tk.Text(
-        janela,
-        wrap="word",
-        bg="#181818",
-        fg=FG
-    )
-
-    texto.pack(
-        expand=True,
-        fill="both",
-        padx=10,
-        pady=10
-    )
-
-    def usar_letra():
-
-        letra = texto.get(
-            1.0,
-            tk.END
-        ).strip()
-
-        if not letra:
-            messagebox.showwarning(
-                "Erro",
-                "Digite uma letra"
-            )
-            return
-
-        text_resultado.delete(
-            1.0,
-            tk.END
-        )
-
-        text_resultado.insert(
-            tk.END,
-            letra
-        )
-
-        janela.destroy()
-
-    tk.Button(
-        janela,
-        text="Usar Letra",
-        command=usar_letra,
-        bg=BTN_BG,
-        fg=BTN_FG
-    ).pack(pady=10)
 
 def salvar_favorito():
     artista = entry_artista.get()
@@ -245,6 +209,156 @@ def salvar_favorito():
             "Favoritos",
             "Essa música já está salva."
         )
+
+def abrir_adicionar_manual():
+    editor = tk.Toplevel(root)
+    editor.title("Adicionar Manual")
+    editor.geometry("600x500")
+    editor.configure(bg=BG)
+
+    tk.Label(editor, text="Artista:", bg=BG, fg=FG).pack(pady=2, anchor="w", padx=10)
+    entry_edit_artista = tk.Entry(editor, bg=ENTRY_BG, fg=FG)
+    entry_edit_artista.insert(0, entry_artista.get())
+    entry_edit_artista.pack(pady=2, padx=10, fill="x")
+
+    tk.Label(editor, text="Música:", bg=BG, fg=FG).pack(pady=2, anchor="w", padx=10)
+    entry_edit_musica = tk.Entry(editor, bg=ENTRY_BG, fg=FG)
+    entry_edit_musica.insert(0, entry_musica.get())
+    entry_edit_musica.pack(pady=2, padx=10, fill="x")
+
+    tk.Label(editor, text="Letra:", bg=BG, fg=FG).pack(pady=2, anchor="w", padx=10)
+    texto_edit = tk.Text(editor, wrap="word", bg="#181818", fg=FG, height=15)
+    texto_edit.pack(pady=2, padx=10, fill="both", expand=True)
+
+    def salvar():
+        artista = entry_edit_artista.get().strip()
+        musica = entry_edit_musica.get().strip()
+        letra = texto_edit.get(1.0, tk.END).strip()
+
+        if not artista or not musica or not letra:
+            messagebox.showwarning("Erro", "Preencha todos os campos")
+            return
+
+        adicionar_manual(artista, musica, letra)
+        messagebox.showinfo("Sucesso", "Música manual adicionada!")
+        editor.destroy()
+        mostrar_manuais()
+
+    tk.Button(
+        editor,
+        text="Salvar",
+        command=salvar,
+        bg=BTN_BG,
+        fg=BTN_FG,
+        relief="flat",
+        padx=20,
+        pady=5
+    ).pack(pady=10)
+
+def mostrar_manuais():
+    manuais = carregar_manuais()
+
+    janela = tk.Toplevel(root)
+    janela.title("✨ Salvos")
+    janela.geometry("700x500")
+    janela.configure(bg=BG)
+
+    lista = tk.Listbox(
+        janela,
+        bg="#181818",
+        fg="white",
+        selectbackground="#1DB954",
+        font=("Arial", 10)
+    )
+    lista.pack(fill="both", expand=True, padx=10, pady=10)
+
+    for idx, manual in enumerate(manuais):
+        lista.insert(
+            tk.END,
+            f"{manual['artista']} - {manual['musica']}"
+        )
+
+    if not manuais:
+        messagebox.showinfo("Salvos", "Nenhuma música salva")
+        return
+
+    def abrir():
+        selecionado = lista.curselection()
+
+        if not selecionado:
+            messagebox.showwarning(
+                "Salvos",
+                "Selecione uma música"
+            )
+            return
+        
+        indice = selecionado[0]
+        manual = manuais[indice]
+
+        entry_artista.delete(0, tk.END)
+        entry_artista.insert(0, manual["artista"])
+
+        entry_musica.delete(0, tk.END)
+        entry_musica.insert(0, manual["musica"])
+
+        text_resultado.delete(1.0, tk.END)
+        text_resultado.insert(tk.END, manual["letra"])
+
+        janela.destroy()
+
+    def remover():
+        selecionado = lista.curselection()
+
+        if not selecionado:
+            messagebox.showwarning(
+                "Salvos",
+                "Selecione uma música"
+            )
+            return
+
+        indice = selecionado[0]
+        manual = manuais[indice]
+
+        resposta = messagebox.askyesno(
+            "Confirmar",
+            f"Remover '{manual['artista']} - {manual['musica']}' dos salvos?"
+        )
+
+        if resposta:
+            remover_manual(indice)
+            messagebox.showinfo("Sucesso", "Removido!")
+            janela.destroy()
+            mostrar_manuais()
+
+    tk.Button(
+        janela,
+        text="Abrir",
+        command=abrir,
+        bg=BTN_BG,
+        fg=BTN_FG
+    ).pack(pady=10, side="left", padx=5)
+
+    tk.Button(
+        janela,
+        text="➕ Adicionar",
+        command=lambda: [janela.destroy(), abrir_adicionar_manual()],
+        bg="#1DB954",
+        fg=BTN_FG,
+        relief="flat",
+        padx=10,
+        pady=5
+    ).pack(pady=10, side="left", padx=5)
+
+    tk.Button(
+        janela,
+        text="Remover",
+        command=remover,
+        bg="#E63946",
+        fg=FG,
+        relief="flat",
+        padx=10,
+        pady=5
+    ).pack(pady=10, side="left", padx=5)
 
 def mostrar_favoritos():
     favoritos = carregar()
@@ -297,13 +411,119 @@ def mostrar_favoritos():
 
         janela.destroy()
 
+    def editar():
+        selecionado = lista.curselection()
+
+        if not selecionado:
+            messagebox.showwarning(
+                "Favoritos",
+                "Selecione uma música"
+            )
+            return
+
+        indice = selecionado[0]
+        favorito = favoritos[indice]
+
+        editor = tk.Toplevel(janela)
+        editor.title("Editar Favorito")
+        editor.geometry("500x350")
+        editor.configure(bg=BG)
+
+        tk.Label(editor, text="Artista:", bg=BG, fg=FG).pack(pady=2, anchor="w", padx=10)
+        entry_edit_artista = tk.Entry(editor, bg=ENTRY_BG, fg=FG)
+        entry_edit_artista.insert(0, favorito["artista"])
+        entry_edit_artista.pack(pady=2, padx=10, fill="x")
+
+        tk.Label(editor, text="Música:", bg=BG, fg=FG).pack(pady=2, anchor="w", padx=10)
+        entry_edit_musica = tk.Entry(editor, bg=ENTRY_BG, fg=FG)
+        entry_edit_musica.insert(0, favorito["musica"])
+        entry_edit_musica.pack(pady=2, padx=10, fill="x")
+
+        tk.Label(editor, text="Letra:", bg=BG, fg=FG).pack(pady=2, anchor="w", padx=10)
+        texto_edit = tk.Text(editor, wrap="word", bg="#181818", fg=FG, height=6)
+        texto_edit.insert(tk.END, favorito["letra"])
+        texto_edit.pack(pady=2, padx=10, fill="both", expand=True)
+
+        def salvar_edicao():
+            novo_artista = entry_edit_artista.get().strip()
+            nova_musica = entry_edit_musica.get().strip()
+            nova_letra = texto_edit.get(1.0, tk.END).strip()
+
+            if not novo_artista or not nova_musica:
+                messagebox.showwarning("Erro", "Preencha artista e música")
+                return
+
+            if atualizar(indice, novo_artista, nova_musica, nova_letra):
+                messagebox.showinfo("Sucesso", "Favorito atualizado!")
+                janela.destroy()
+                mostrar_favoritos()
+            else:
+                messagebox.showerror("Erro", "Não foi possível atualizar")
+
+        tk.Button(
+            editor,
+            text="Salvar",
+            command=salvar_edicao,
+            bg=BTN_BG,
+            fg=BTN_FG,
+            relief="flat",
+            padx=20,
+            pady=5
+        ).pack(pady=8)
+
+    def remover_fav():
+        selecionado = lista.curselection()
+
+        if not selecionado:
+            messagebox.showwarning(
+                "Favoritos",
+                "Selecione uma música"
+            )
+            return
+
+        indice = selecionado[0]
+        favorito = favoritos[indice]
+
+        resposta = messagebox.askyesno(
+            "Confirmar",
+            f"Remover '{favorito['artista']} - {favorito['musica']}' dos favoritos?"
+        )
+
+        if resposta:
+            remover(indice)
+            messagebox.showinfo("Sucesso", "Removido!")
+            janela.destroy()
+            mostrar_favoritos()
+
     tk.Button(
         janela,
         text="Abrir",
         command=abrir,
         bg=BTN_BG,
         fg=BTN_FG
-    ).pack(pady=10)
+    ).pack(pady=10, side="left", padx=5)
+
+    tk.Button(
+        janela,
+        text="Editar",
+        command=editar,
+        bg="#555555",
+        fg=FG,
+        relief="flat",
+        padx=10,
+        pady=5
+    ).pack(pady=10, side="left", padx=5)
+
+    tk.Button(
+        janela,
+        text="Remover",
+        command=remover_fav,
+        bg="#E63946",
+        fg=FG,
+        relief="flat",
+        padx=10,
+        pady=5
+    ).pack(pady=10, side="left", padx=5)
 
 
 # 🖥️ JANELA
@@ -356,7 +576,7 @@ criar_botao("Buscar", buscar).grid(row=0, column=0, padx=5)
 criar_botao("Traduzir", traduzir).grid(row=0, column=1, padx=5)
 criar_botao("Favoritar ⭐", salvar_favorito).grid(row=0, column=2, padx=5)
 criar_botao("⭐ Favoritos", mostrar_favoritos).grid(row=0, column=3, padx=5)
-criar_botao("➕ Letra manual", abrir_editor_manual).grid(row=0, column=4, padx=5)
+criar_botao("✨ Salvos", mostrar_manuais).grid(row=0, column=4, padx=5)
 
 # 📦 RESULTADO
 frame_resultado = tk.Frame(root, bg=BG)
