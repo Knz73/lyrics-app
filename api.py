@@ -2,10 +2,20 @@ import requests
 import urllib.parse
 import re
 import os
+import sys
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 
-load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
+# Tenta carregar .env (compatível com script e PyInstaller)
+if hasattr(sys, '_MEIPASS'):
+    base_path = os.path.dirname(sys.executable)
+else:
+    base_path = os.path.dirname(os.path.abspath(__file__))
+
+env_path = os.path.join(base_path, ".env")
+if os.path.exists(env_path):
+    load_dotenv(env_path)
+
 GENIUS_TOKEN = os.environ.get("GENIUS_API_TOKEN")
 if not GENIUS_TOKEN:
     raise ValueError("GENIUS_API_TOKEN environment variable not set")
